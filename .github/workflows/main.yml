@@ -1,44 +1,64 @@
+# Layout: this repository holds only a Content Builder project. The assets come from another repository.
+# The built content is uploaded as a workflow artifact for each platform.
 name: Build Content Project with Remote Assets
 
 on:
-    workflow_dispatch:
-        inputs:
-            configuration:
-                description: "Build configuration"
-                required: false
-                default: "Release"
-                type: choice
-                options:
-                    - Debug
-                    - Release
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: 'Build configuration'
+        required: false
+        default: 'Release'
+        type: choice
+        options:
+          - Debug
+          - Release
+      assets-repo:
+        description: 'Repository holding the assets, as owner/repo.'
+        required: false
+        default: 'MonoGame/MonoGame-CBPlatform-TestAssets'
+        type: string
+      assets-path:
+        description: 'Folder inside the assets repository that holds the assets. Leave empty for the root.'
+        required: false
+        default: ''
+        type: string
 
 env:
-    DotnetVersion: 9.0.307
-    Configuration: ${{ github.event.inputs.configuration || 'Release' }}
+  DotnetVersion: 10.0.401
+  Configuration: ${{ inputs.configuration || 'Release' }}
 
 jobs:
-  build-contentbuilder:
+  build-content:
+    name: Content ${{ matrix.platform }}
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [DesktopGL, DesktopVK, WindowsDX12, Android, iOS]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Generate global.json
+        shell: bash
         run: |
           echo '{ "sdk": { "version": "${{ env.DotnetVersion }}" } }' > global.json
 
-      - name: Setup .NET Core SDK
-        uses: actions/setup-dotnet@v5
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '${{ env.DotnetVersion }}'
-          global-json-file: "./global.json"
+          dotnet-version: ${{ env.DotnetVersion }}
+          global-json-file: ./global.json
 
-      - name: Build Content (DesktopGL)
+      # The builder writes a Content folder inside the output folder.
+      - name: Build content
         id: build_content
         uses: MonoGame/monogame-actions/build-content@v1
         with:
-          content-builder-path: 'Content'
-          assets-repo: 'MonoGame/MonoGame-CBPlatform-TestAssets'
-          assets-path: ''
-          monogame-platform: 'DesktopGL'
-          output-folder: './CBPlatformTest.DesktopGL/bin/${{ env.Configuration }}/net9.0/win-x64/Content'
+          content-builder-path: ./Content
+          assets-repo: ${{ inputs.assets-repo }}
+          assets-path: ${{ inputs.assets-path }}
+          monogame-platform: ${{ matrix.platform }}
+          output-folder: ./Output/${{ matrix.platform }}
+          configuration: ${{ env.Configuration }}
           upload-output: 'true'
